@@ -1,6 +1,6 @@
 # config.py
 POSTGRES_CONFIG = {
-    "dbname": "copilot",
+    "dbname": "qor",
     "user": "postgres",
     "password": "root",
     "host": "172.16.16.54",

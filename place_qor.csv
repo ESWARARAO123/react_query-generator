@@ -1,0 +1,72 @@
+metrics,place
+Buffer count,25
+icgs count,0
+combinational count,7481
+inverter count,875
+macro count,0
+physical count,832
+sequential count,1926
+latch count,1
+insts count,11139
+macroarea,0
+buffer area,33.90336
+inverter area,147.17376
+combinational area,2476.70784
+icgs area,0
+sequential area,2429.7408
+physical area,314.97984
+latch area,0.7776
+Total area,5402.5056
+dynamic power,5.67640001148
+internal power,4.23975845575
+leakage power,0.0103403423306
+switching power,2.16331704814
+total power,6.41341555582
+analysis views,8
+setup:in2out:wns,-1.03880
+setup:in2out:tns,-26.9542
+setup:in2out:fep,32
+setup:in2reg:wns,-2.02546
+setup:in2reg:tns,-1070.15102
+setup:in2reg:fep,2744
+setup:reg2cgate:wns,-0.08196
+setup:reg2cgate:tns,-0.08196
+setup:reg2cgate:fep,1
+setup:reg2out:wns,-1.49049
+setup:reg2out:tns,-109.14948
+setup:reg2out:fep,100
+setup:reg2reg:wns,-2.88589
+setup:reg2reg:tns,-6360.82835
+setup:reg2reg:fep,3090
+hold:in2out:wns,0.53120
+hold:in2out:tns,0
+hold:in2out:fep,0
+hold:in2reg:wns,0.18246
+hold:in2reg:tns,0
+hold:in2reg:fep,0
+hold:reg2cgate:wns,0.05250
+hold:reg2cgate:tns,0
+hold:reg2cgate:fep,0
+hold:reg2out:wns,0.26030
+hold:reg2out:tns,0
+hold:reg2out:fep,0
+hold:reg2reg:wns,0.00017
+hold:reg2reg:tns,0
+hold:reg2reg:fep,0
+Horizontal Overflow,8.13
+Vertical Overflow,22.17
+max congestion,156.44
+Total congestion,459.11
+Total M1 Wire Length ,       0.00
+Total M2 Wire Length ,   26300.99
+Total M3 Wire Length ,   53817.67
+Total M4 Wire Length ,   42085.42
+Total M5 Wire Length ,   22830.51
+Total M6 Wire Length ,   19619.01
+Total M7 Wire Length ,   10731.16
+Total M8 Wire Length ,     125.60
+Total M9 Wire Length ,      10.08
+Total AP Wire Length ,       0.00
+Total Wire Length    ,  175520.45
+Core utilization,71.922015
+Density, 0.707

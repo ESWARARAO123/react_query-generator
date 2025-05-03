@@ -1,0 +1,42 @@
+metrics,floorplan
+Buffer count,20
+icgs count,0
+combinational count,7480
+inverter count,909
+macro count,0
+physical count,882
+sequential count,1926
+latch count,1
+insts count,11217
+macroarea,0
+buffer area,4.30272
+inverter area,156.71232
+combinational area,2454.20928
+icgs area,0
+sequential area,2430.36288
+physical area,335.71584
+latch area,0.7776
+Total area,5381.30304
+dynamic power,6.06821472996
+internal power,4.82853814835
+leakage power,0.0101822129422
+switching power,1.59012052313
+total power,6.42884052692
+analysis views,8
+Horizontal Overflow,1.53
+Vertical Overflow,1.54
+max congestion,0.44
+Total congestion,0.44
+Total M1 Wire Length ,       0.00
+Total M2 Wire Length ,   10276.67
+Total M3 Wire Length ,    8158.28
+Total M4 Wire Length ,   13590.13
+Total M5 Wire Length ,    2467.26
+Total M6 Wire Length ,    5658.05
+Total M7 Wire Length ,    1828.70
+Total M8 Wire Length ,      83.92
+Total M9 Wire Length ,      33.84
+Total AP Wire Length ,       0.00
+Total Wire Length    ,   42096.84
+Core utilization,71.639752
+Density, 0.704

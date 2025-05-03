@@ -6,30 +6,15 @@ from config import POSTGRES_CONFIG
 def get_schema():
     """Fetch schema metadata from PostgreSQL"""
     conn = psycopg2.connect(**POSTGRES_CONFIG)
-    query = """
-    SELECT
-        table_name,
-        column_name,
-        data_type,
-        is_nullable
-    FROM
-        information_schema.columns
-    WHERE
-        table_schema = 'public'
-    ORDER BY
-        table_name, ordinal_position;
-    """
-    df = pd.read_sql(query, conn)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+    """)
+    tables = [row[0] for row in cursor.fetchall()]
     conn.close()
-    
-    # Format schema for LLM
-    schema_str = "Database Schema:\n"
-    for table in df['table_name'].unique():
-        cols = df[df['table_name'] == table]
-        schema_str += f"- Table: {table}\n  Columns: "
-        schema_str += ", ".join([f"{row['column_name']} ({row['data_type']})" for _, row in cols.iterrows()])
-        schema_str += "\n"
-    return schema_str
+    return tables
 
 def execute_sql(sql_query):
     """Run SQL and return result as DataFrame"""
@@ -39,3 +24,6 @@ def execute_sql(sql_query):
         return df
     finally:
         conn.close()
+
+if __name__ == "__main__":
+    print(get_schema())
