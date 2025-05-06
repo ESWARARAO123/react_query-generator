@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Container, 
   TextField, 
@@ -13,20 +13,87 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  IconButton,
+  List,
+  ListItem,
+  Divider
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import BrainIcon from './assets/brain.png';
 import GenerateIcon from './assets/generative.png';
-import ExecuteIcon from './assets/task-management.png';
 import SuccessIcon from './assets/database-management.png';
 import ErrorIcon from './assets/browser.png';
+import EditIcon from '@mui/icons-material/Edit';
+import CancelIcon from '@mui/icons-material/Cancel';
+import SendIcon from '@mui/icons-material/Send';
 import { saveAs } from 'file-saver';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
-  padding: theme.spacing(3),
-  marginTop: theme.spacing(3),
+  padding: theme.spacing(2),
   backgroundColor: '#f5f5f5',
+  display: 'flex',
+  gap: theme.spacing(2),
+  alignItems: 'flex-start',
+  maxWidth: '1200px',
+  margin: '0 auto',
+}));
+
+const ChatContainer = styled(Box)(({ theme }) => ({
+  height: 'calc(100vh - 180px)',
+  overflowY: 'auto',
+  padding: theme.spacing(2),
+  backgroundColor: '#ffffff',
+  borderRadius: theme.spacing(1),
+  marginBottom: theme.spacing(2),
+  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+}));
+
+const TableWrapper = styled(Box)(({ theme }) => ({
+  maxHeight: '400px',
+  overflowY: 'auto',
+  border: '1px solid #e0e0e0',
+  borderRadius: theme.spacing(1),
+  '& .MuiTable-root': {
+    borderCollapse: 'separate',
+    borderSpacing: 0,
+  },
+  '& .MuiTableHead-root': {
+    position: 'sticky',
+    top: 0,
+    backgroundColor: '#f5f5f5',
+    zIndex: 1,
+  },
+  '& .MuiTableCell-head': {
+    backgroundColor: '#f5f5f5',
+    fontWeight: 'bold',
+    borderBottom: '2px solid #e0e0e0',
+  },
+  '& .MuiTableCell-root': {
+    padding: theme.spacing(1),
+    whiteSpace: 'nowrap',
+  },
+}));
+
+const InputContainer = styled(Box)(({ theme }) => ({
+  position: 'fixed',
+  bottom: 0,
+  left: 0,
+  right: 0,
+  padding: theme.spacing(2),
+  backgroundColor: '#ffffff',
+  boxShadow: '0 -2px 4px rgba(0,0,0,0.1)',
+  zIndex: 1000,
+}));
+
+const MessageBubble = styled(Box)(({ theme, isUser }) => ({
+  maxWidth: '80%',
+  padding: theme.spacing(2),
+  marginBottom: theme.spacing(2),
+  borderRadius: theme.spacing(2),
+  backgroundColor: isUser ? '#e3f2fd' : '#f5f5f5',
+  marginLeft: isUser ? 'auto' : 0,
+  marginRight: isUser ? 0 : 'auto',
 }));
 
 const Icon = styled('img')({
@@ -39,9 +106,10 @@ function App() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [result, setResult] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [schema, setSchema] = useState(null);
   const [schemaLoading, setSchemaLoading] = useState(true);
+  const chatContainerRef = useRef(null);
 
   useEffect(() => {
     const fetchSchema = async () => {
@@ -66,6 +134,12 @@ function App() {
     fetchSchema();
   }, []);
 
+  useEffect(() => {
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!schema) {
@@ -75,7 +149,9 @@ function App() {
 
     setLoading(true);
     setError(null);
-    setResult(null);
+
+    // Add user message
+    setMessages(prev => [...prev, { type: 'user', content: query }]);
 
     try {
       const response = await fetch('http://localhost:8005/api/execute', {
@@ -89,32 +165,147 @@ function App() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.detail);
       
-      setResult(data);
+      // Add system message with SQL
+      setMessages(prev => [...prev, { 
+        type: 'system', 
+        content: 'Generated SQL Query:',
+        sql: data.sql 
+      }]);
+
+      // Add data message
+      setMessages(prev => [...prev, { 
+        type: 'system', 
+        content: 'Query Results:',
+        data: data.data,
+        columns: data.columns
+      }]);
+
+      // Add graph if available
+      if (data.graph) {
+        setMessages(prev => [...prev, { 
+          type: 'system', 
+          content: 'Data Visualization:',
+          graph: data.graph
+        }]);
+      }
     } catch (err) {
       setError(err.message);
+      setMessages(prev => [...prev, { 
+        type: 'error', 
+        content: `Error: ${err.message}` 
+      }]);
     } finally {
       setLoading(false);
+      setQuery('');
     }
   };
 
-  // Helper to convert result to CSV
-  const downloadCSV = () => {
-    if (!result || !result.data || !result.columns) return;
+  const downloadCSV = (data, columns) => {
+    if (!data || !columns) return;
     const csvRows = [];
     // Add header
-    csvRows.push(result.columns.join(','));
+    csvRows.push(columns.join(','));
     // Add rows
-    result.data.forEach(row => {
-      csvRows.push(result.columns.map(col => JSON.stringify(row[col] ?? '')).join(','));
+    data.forEach(row => {
+      csvRows.push(columns.map(col => JSON.stringify(row[col] ?? '')).join(','));
     });
     const csvString = csvRows.join('\n');
     const blob = new Blob([csvString], { type: 'text/csv' });
     saveAs(blob, 'query_results.csv');
   };
 
+  const renderMessage = (message) => {
+    switch (message.type) {
+      case 'user':
+        return (
+          <MessageBubble isUser>
+            <Typography>{message.content}</Typography>
+          </MessageBubble>
+        );
+      case 'system':
+        return (
+          <MessageBubble>
+            <Typography variant="h6" gutterBottom>{message.content}</Typography>
+            {message.sql && (
+              <pre style={{ 
+                backgroundColor: '#f8f9fa', 
+                padding: '1rem',
+                borderRadius: '4px',
+                overflowX: 'auto',
+                marginBottom: '1rem'
+              }}>
+                {message.sql}
+              </pre>
+            )}
+            {message.data && message.columns && (
+              <>
+                <TableWrapper>
+                  <TableContainer>
+                    <Table size="small" stickyHeader>
+                      <TableHead>
+                        <TableRow>
+                          {message.columns.map((column) => (
+                            <TableCell key={column}>{column}</TableCell>
+                          ))}
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {message.data.map((row, i) => (
+                          <TableRow key={i}>
+                            {message.columns.map((column) => (
+                              <TableCell key={column}>{row[column]}</TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </TableWrapper>
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                  <Button 
+                    variant="outlined" 
+                    color="primary" 
+                    onClick={() => downloadCSV(message.data, message.columns)}
+                  >
+                    Download CSV
+                  </Button>
+                </Box>
+              </>
+            )}
+            {message.graph && (
+              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                <img 
+                  src={`data:image/png;base64,${message.graph}`}
+                  alt="Data Visualization"
+                  style={{ maxWidth: '100%', height: 'auto' }}
+                />
+              </Box>
+            )}
+          </MessageBubble>
+        );
+      case 'error':
+        return (
+          <MessageBubble>
+            <Alert severity="error">{message.content}</Alert>
+          </MessageBubble>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (query.trim() && !loading && schema && !schemaLoading) {
+        handleSubmit(e);
+      }
+    }
+  };
+
   return (
-    <Container maxWidth="lg">
-      <Box sx={{ display: 'flex', alignItems: 'center', my: 3 }}>
+    <Container maxWidth="lg" sx={{ height: '100vh', display: 'flex', flexDirection: 'column', pb: '80px' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', my: 2 }}>
         <Icon src={BrainIcon} alt="Brain" />
         <Typography variant="h4" component="h1">
           PostgreSQL Natural Language Query Assistant
@@ -128,92 +319,55 @@ function App() {
         </Box>
       )}
 
-      {error && (
-        <Alert severity="error" sx={{ mt: 2 }}>
-          {error}
-        </Alert>
-      )}
+      <ChatContainer ref={chatContainerRef}>
+        {messages.map((message, index) => (
+          <Box key={index}>
+            {renderMessage(message)}
+          </Box>
+        ))}
+        {loading && (
+          <Box sx={{ display: 'flex', alignItems: 'center', my: 2 }}>
+            <CircularProgress size={24} />
+            <Typography sx={{ ml: 2 }}>Processing...</Typography>
+          </Box>
+        )}
+      </ChatContainer>
 
-      <StyledPaper>
-        <form onSubmit={handleSubmit}>
+      <InputContainer>
+        <StyledPaper>
           <TextField
             fullWidth
             label="Enter your question"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            margin="normal"
+            onKeyPress={handleKeyPress}
             variant="outlined"
-            disabled={!schema || schemaLoading}
+            disabled={!schema || schemaLoading || loading}
+            multiline
+            rows={1}
+            sx={{ 
+              flex: 1,
+              '& .MuiOutlinedInput-root': {
+                height: '48px',
+              }
+            }}
           />
           <Button 
             type="submit" 
             variant="contained" 
             color="primary"
             disabled={loading || !schema || schemaLoading}
-            sx={{ mt: 2 }}
+            onClick={handleSubmit}
+            sx={{ 
+              height: '48px',
+              minWidth: '100px'
+            }}
+            endIcon={<SendIcon />}
           >
-            Generate SQL & Run
+            Send
           </Button>
-        </form>
-      </StyledPaper>
-
-      {loading && (
-        <Box sx={{ display: 'flex', alignItems: 'center', my: 2 }}>
-          <CircularProgress size={24} />
-          <Typography sx={{ ml: 2 }}>Processing...</Typography>
-        </Box>
-      )}
-
-      {result && (
-        <>
-          <StyledPaper sx={{ mt: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Icon src={GenerateIcon} alt="Generate" />
-              <Typography variant="h6">Generated SQL</Typography>
-            </Box>
-            <pre style={{ 
-              backgroundColor: '#f8f9fa', 
-              padding: '1rem',
-              borderRadius: '4px',
-              overflowX: 'auto'
-            }}>
-              {result.sql}
-            </pre>
-          </StyledPaper>
-
-          <StyledPaper sx={{ mt: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-              <Icon src={SuccessIcon} alt="Success" />
-              <Typography variant="h6">Query Results</Typography>
-            </Box>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    {result.columns.map((column) => (
-                      <TableCell key={column}>{column}</TableCell>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {result.data.map((row, i) => (
-                    <TableRow key={i}>
-                      {result.columns.map((column) => (
-                        <TableCell key={column}>{row[column]}</TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-            <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-              <Button variant="outlined" color="primary" onClick={downloadCSV}>
-                Download CSV
-              </Button>
-            </Box>
-          </StyledPaper>
-        </>
-      )}
+        </StyledPaper>
+      </InputContainer>
     </Container>
   );
 }
