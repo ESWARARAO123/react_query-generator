@@ -1,61 +1,92 @@
 # database.py
 import psycopg2
+from psycopg2.extras import RealDictCursor
 import pandas as pd
-from config import POSTGRES_CONFIG
+from config import DB_CONFIG
 
-def get_schema():
-    """Fetch schema metadata from PostgreSQL"""
+def get_connection():
+    """Create and return a database connection"""
     try:
-        conn = psycopg2.connect(**POSTGRES_CONFIG)
-        query = """
-        SELECT 
-            table_name,
-            column_name,
-            data_type,
-            is_nullable
-        FROM
-            information_schema.columns
-        WHERE
-            table_schema = 'public'
-        ORDER BY
-            table_name, 
-            ordinal_position;
-        """
-        df = pd.read_sql(query, conn)
-        conn.close()
-        
-        if df.empty:
-            return "No tables found in the database."
-        
-        # Format schema for LLM
-        schema_str = "Database Schema:\n"
-        for table in df['table_name'].unique():
-            cols = df[df['table_name'] == table]
-            schema_str += f"- Table: {table}\n  Columns: "
-            schema_str += ", ".join([f"{row['column_name']} ({row['data_type']})" for _, row in cols.iterrows()])
-            schema_str += "\n"
-        return schema_str
-    except psycopg2.OperationalError as e:
-        error_msg = f"Database connection error: {str(e)}"
-        print(error_msg)
-        return f"Error: Could not connect to database. Please check if PostgreSQL is running and accessible at {POSTGRES_CONFIG['host']}:{POSTGRES_CONFIG['port']}"
+        conn = psycopg2.connect(
+            host=DB_CONFIG['host'],
+            database=DB_CONFIG['database'],
+            user=DB_CONFIG['user'],
+            password=DB_CONFIG['password'],
+            port=DB_CONFIG['port']
+        )
+        return conn
     except Exception as e:
-        error_msg = f"Error fetching schema: {str(e)}"
-        print(error_msg)
-        return f"Error: {error_msg}"
+        raise Exception(f"Failed to connect to database: {str(e)}")
 
-def execute_sql(sql_query):
-    """Run SQL and return result as DataFrame"""
+def execute_sql(query):
+    """Execute SQL query and return results as pandas DataFrame"""
     try:
-        conn = psycopg2.connect(**POSTGRES_CONFIG)
-        df = pd.read_sql(sql_query, conn)
+        conn = get_connection()
+        df = pd.read_sql_query(query, conn)
+        conn.close()
         return df
     except Exception as e:
-        print(f"Query execution error: {str(e)}")
         raise Exception(f"Failed to execute query: {str(e)}")
-    finally:
-        if 'conn' in locals():
-            conn.close()
+
+def get_schema():
+    """Get database schema information"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Get all tables
+        cursor.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+        """)
+        tables = cursor.fetchall()
+        
+        schema = {}
+        for table in tables:
+            table_name = table['table_name']
+            
+            # Get columns for each table
+            cursor.execute(f"""
+                SELECT column_name, data_type, is_nullable
+                FROM information_schema.columns
+                WHERE table_name = '{table_name}'
+                ORDER BY ordinal_position
+            """)
+            columns = cursor.fetchall()
+            
+            schema[table_name] = {
+                'columns': [col['column_name'] for col in columns],
+                'types': {col['column_name']: col['data_type'] for col in columns},
+                'nullable': {col['column_name']: col['is_nullable'] == 'YES' for col in columns}
+            }
+        
+        cursor.close()
+        conn.close()
+        return schema
+    except Exception as e:
+        raise Exception(f"Failed to get schema: {str(e)}")
+
+def get_tables():
+    """Get list of all tables in the database"""
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Get all tables
+        cursor.execute("""
+            SELECT table_name 
+            FROM information_schema.tables 
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """)
+        tables = [row[0] for row in cursor.fetchall()]
+        
+        cursor.close()
+        conn.close()
+        return tables
+    except Exception as e:
+        raise Exception(f"Failed to get tables: {str(e)}")
 
 if __name__ == "__main__":
     print(get_schema())

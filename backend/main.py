@@ -1,15 +1,24 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import subprocess
 import json
 import os
 import tempfile
 import base64
-from database import execute_sql, get_schema
+import pandas as pd
+from database import execute_sql, get_schema, get_tables
 from model import generate_sql
+from typing import List, Dict, Any, Optional
 
-app = FastAPI()
+app = FastAPI(
+    title="Chat2SQL API",
+    description="API for converting natural language queries to SQL and executing them",
+    version="1.0.0",
+    docs_url="/api/docs",
+    redoc_url="/api/redoc"
+)
 
 # Enable CORS
 app.add_middleware(
@@ -22,6 +31,25 @@ app.add_middleware(
 
 class QueryRequest(BaseModel):
     query: str
+
+class CSVDownloadRequest(BaseModel):
+    data: list
+    columns: list
+    filename: str
+
+class QueryResponse(BaseModel):
+    sql: str
+    data: List[Dict[str, Any]]
+    columns: List[str]
+
+class DatabaseSchema(BaseModel):
+    tables: Dict[str, Dict[str, Any]]
+
+class SchemaResponse(BaseModel):
+    database_schema: DatabaseSchema
+
+class TablesResponse(BaseModel):
+    table_list: List[str]
 
 def generate_graph_code(data, columns):
     # Create a temporary Python file for graph generation
@@ -76,16 +104,45 @@ def clean_sql_query(sql_query):
     
     return sql
 
-@app.get("/api/schema")
+@app.get("/api/schema", response_model=SchemaResponse, tags=["Database"])
 async def get_database_schema():
+    """
+    Get the complete database schema.
+    
+    Returns:
+        SchemaResponse: The database schema including tables and their columns
+    """
     try:
         schema = get_schema()
-        return {"schema": schema}
+        return {"database_schema": {"tables": schema}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/api/execute")
+@app.get("/api/tables", response_model=TablesResponse, tags=["Database"])
+async def get_available_tables():
+    """
+    Get list of available tables in the database.
+    
+    Returns:
+        TablesResponse: List of table names
+    """
+    try:
+        tables = get_tables()
+        return {"table_list": tables}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/execute", response_model=QueryResponse, tags=["Query"])
 async def execute_query_endpoint(request: QueryRequest):
+    """
+    Execute a natural language query and return the results.
+    
+    Args:
+        request (QueryRequest): The natural language query
+        
+    Returns:
+        QueryResponse: The SQL query, results data, and column names
+    """
     try:
         # Get schema first
         schema = get_schema()
@@ -194,6 +251,34 @@ async def execute_query_endpoint(request: QueryRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/download-csv")
+async def download_csv(request: CSVDownloadRequest):
+    try:
+        # Create DataFrame from the data
+        df = pd.DataFrame(request.data, columns=request.columns)
+        
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
+            # Save DataFrame to CSV
+            df.to_csv(tmp.name, index=False)
+            
+            # Read the file content
+            with open(tmp.name, 'rb') as f:
+                content = f.read()
+            
+            # Clean up
+            os.unlink(tmp.name)
+            
+            # Return the CSV content with proper headers
+            return JSONResponse(
+                content={
+                    "filename": request.filename,
+                    "content": base64.b64encode(content).decode('utf-8')
+                }
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8005)
+    uvicorn.run(app, host="0.0.0.0", port=5000)

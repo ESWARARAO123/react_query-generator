@@ -29,7 +29,7 @@ Important rules:
 18. For queries about metrics, always include the metric name in the results unless specifically asked not to
 19. When the query is about a specific metric, make sure to return both the metric name and its corresponding value
 20. If the query is about finding a value for a specific metric, use a WHERE clause to filter for that metric
-
+21. if user asked one column value by mentionoing the column name, return asked column value and mentioned column value also.
 Schema:
 {schema}
 

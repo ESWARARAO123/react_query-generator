@@ -27,7 +27,10 @@ import ErrorIcon from './assets/browser.png';
 import EditIcon from '@mui/icons-material/Edit';
 import CancelIcon from '@mui/icons-material/Cancel';
 import SendIcon from '@mui/icons-material/Send';
+import DownloadIcon from '@mui/icons-material/Download';
 import { saveAs } from 'file-saver';
+
+const BACKEND_URL = 'http://localhost:5000';
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(2),
@@ -115,16 +118,18 @@ function App() {
     const fetchSchema = async () => {
       try {
         setSchemaLoading(true);
-        const response = await fetch('http://localhost:8005/api/schema');
+        const response = await fetch(`${BACKEND_URL}/api/schema`);
         if (!response.ok) {
           throw new Error('Failed to fetch schema');
         }
         const data = await response.json();
-        if (data.schema && data.schema.startsWith('Error:')) {
-          throw new Error(data.schema);
+        if (data.database_schema && data.database_schema.tables) {
+          setSchema(data.database_schema.tables);
+        } else {
+          throw new Error('Invalid schema format received');
         }
-        setSchema(data.schema);
       } catch (err) {
+        console.error('Schema loading error:', err);
         setError(err.message);
       } finally {
         setSchemaLoading(false);
@@ -142,9 +147,8 @@ function App() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!schema) {
-      setError('Database schema not available. Please check your connection.');
-      return;
+    if (!query.trim()) {
+      return; // Don't submit empty queries
     }
 
     setLoading(true);
@@ -154,12 +158,12 @@ function App() {
     setMessages(prev => [...prev, { type: 'user', content: query }]);
 
     try {
-      const response = await fetch('http://localhost:8005/api/execute', {
+      const response = await fetch(`${BACKEND_URL}/api/execute`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query: query.trim() }),
       });
 
       const data = await response.json();
@@ -189,6 +193,7 @@ function App() {
         }]);
       }
     } catch (err) {
+      console.error('Query execution error:', err);
       setError(err.message);
       setMessages(prev => [...prev, { 
         type: 'error', 
@@ -200,18 +205,47 @@ function App() {
     }
   };
 
-  const downloadCSV = (data, columns) => {
-    if (!data || !columns) return;
-    const csvRows = [];
-    // Add header
-    csvRows.push(columns.join(','));
-    // Add rows
-    data.forEach(row => {
-      csvRows.push(columns.map(col => JSON.stringify(row[col] ?? '')).join(','));
-    });
-    const csvString = csvRows.join('\n');
-    const blob = new Blob([csvString], { type: 'text/csv' });
-    saveAs(blob, 'query_results.csv');
+  const handleDownloadCSV = async (data, columns) => {
+    try {
+      // Ask user for filename
+      const filename = prompt('Enter filename for CSV download:', 'query_results.csv');
+      if (!filename) return; // User cancelled
+
+      // Ensure filename has .csv extension
+      const finalFilename = filename.endsWith('.csv') ? filename : `${filename}.csv`;
+      
+      // Create a temporary link element
+      const link = document.createElement('a');
+      
+      // Convert data to CSV
+      const csvRows = [];
+      // Add header
+      csvRows.push(columns.join(','));
+      // Add rows
+      data.forEach(row => {
+        csvRows.push(columns.map(col => JSON.stringify(row[col] ?? '')).join(','));
+      });
+      const csvString = csvRows.join('\n');
+      
+      // Create blob and URL
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Set up the link
+      link.href = url;
+      link.setAttribute('download', finalFilename);
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading CSV:', error);
+      alert('Failed to download CSV file');
+    }
   };
 
   const renderMessage = (message) => {
@@ -263,9 +297,10 @@ function App() {
                 </TableWrapper>
                 <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
                   <Button 
-                    variant="outlined" 
-                    color="primary" 
-                    onClick={() => downloadCSV(message.data, message.columns)}
+                    variant="contained"
+                    color="primary"
+                    onClick={() => handleDownloadCSV(message.data, message.columns)}
+                    startIcon={<DownloadIcon />}
                   >
                     Download CSV
                   </Button>
@@ -319,6 +354,12 @@ function App() {
         </Box>
       )}
 
+      {error && (
+        <Alert severity="error" sx={{ my: 2 }}>
+          {error}
+        </Alert>
+      )}
+
       <ChatContainer ref={chatContainerRef}>
         {messages.map((message, index) => (
           <Box key={index}>
@@ -342,7 +383,7 @@ function App() {
             onChange={(e) => setQuery(e.target.value)}
             onKeyPress={handleKeyPress}
             variant="outlined"
-            disabled={!schema || schemaLoading || loading}
+            disabled={loading}
             multiline
             rows={1}
             sx={{ 
@@ -356,7 +397,7 @@ function App() {
             type="submit" 
             variant="contained" 
             color="primary"
-            disabled={loading || !schema || schemaLoading}
+            disabled={loading || !query.trim()}
             onClick={handleSubmit}
             sx={{ 
               height: '48px',
