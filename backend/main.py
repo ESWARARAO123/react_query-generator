@@ -11,6 +11,7 @@ import pandas as pd
 from database import execute_sql, get_schema, get_tables
 from model import generate_sql
 from typing import List, Dict, Any, Optional
+from urllib.parse import quote
 
 app = FastAPI(
     title="Chat2SQL API",
@@ -41,6 +42,7 @@ class QueryResponse(BaseModel):
     sql: str
     data: List[Dict[str, Any]]
     columns: List[str]
+    curl_command: Optional[str] = None
 
 class DatabaseSchema(BaseModel):
     tables: Dict[str, Dict[str, Any]]
@@ -141,7 +143,7 @@ async def execute_query_endpoint(request: QueryRequest):
         request (QueryRequest): The natural language query
         
     Returns:
-        QueryResponse: The SQL query, results data, and column names
+        QueryResponse: The SQL query, results data, column names, and curl command
     """
     try:
         # Get schema first
@@ -210,11 +212,17 @@ async def execute_query_endpoint(request: QueryRequest):
                 # Clean up the temporary file
                 os.unlink(temp_file)
                 
+                # Generate curl command
+                curl_command = f"""curl -X POST http://localhost:5000/api/execute \\
+-H "Content-Type: application/json" \\
+-d '{{"query": "{quote(request.query)}"}}'"""
+
                 return {
                     "sql": sql_query,
                     "data": result['data'],
                     "columns": result['columns'],
-                    "graph": img_str
+                    "graph": img_str,
+                    "curl_command": curl_command
                 }
             except subprocess.CalledProcessError as e:
                 raise HTTPException(status_code=500, detail=f"Graph generation failed: {str(e)}")
@@ -242,11 +250,17 @@ async def execute_query_endpoint(request: QueryRequest):
             sql_query = generate_sql(fix_query, schema)
             sql_query = clean_sql_query(sql_query)
             df = execute_sql(sql_query)
-            
+        
+        # Generate curl command
+        curl_command = f"""curl -X POST http://localhost:5000/api/execute \\
+-H "Content-Type: application/json" \\
+-d '{{"query": "{quote(request.query)}"}}'"""
+
         return {
             "sql": sql_query,
             "data": df.to_dict(orient='records'),
-            "columns": df.columns.tolist()
+            "columns": df.columns.tolist(),
+            "curl_command": curl_command
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
